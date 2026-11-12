@@ -14,34 +14,23 @@ npm test                # QR token testleri
 npx tsc --noEmit && npx expo lint
 ```
 
-`EXPO_PUBLIC_KK_API_URL` verilmezse uygulama **DEMO** modunda çalışır: her 6 haneli kod eşleşir, `000000` süresi dolmuş kodu dener, ara sıra sahte okutma bildirimi gelir.
-
-```bash
-EXPO_PUBLIC_KK_API_URL=https://api.kampuskartim.com npx expo start
-```
+Backend Firebase'dir (yönetim paneli ve öğrenci uygulamasıyla aynı proje); ortam değişkeni gerekmez. Bağlantı `src/lib/firebase.ts`,
+tüm okuma/yazma `src/lib/api.ts`. Kurallar panel deposunda: `firebase/firestore.rules` (`devices`, `pairingCodes`, `qrTokens`, `redemptions`).
 
 ## Akış
 
-1. **Eşleştirme** (`src/app/pair.tsx`): Süper Admin › Kasa cihazları › *Tablet eşleştir* ekranındaki 6 haneli kod girilir. Dönen cihaz sırrı Keychain/Keystore'da (`expo-secure-store`) saklanır.
-2. **Kasa ekranı** (`src/app/index.tsx`): büyük QR, geri sayım halkası, işletme bilgisi, bağlantı durumu, bugünkü okutma sayısı, son 3 onay. Ekran kararmaz (`expo-keep-awake`). Yatay ve dikey yerleşimi var.
-3. **Senkron** (`src/lib/kasa.tsx`): 30 sn'de bir ve uygulama öne geldiğinde `heartbeat`. Sunucu saatine göre saat farkı düzeltilir. `revoked` ya da 401/403 gelirse cihaz eşleştirmesi silinir ve eşleştirme ekranına dönülür.
-4. **Gizli çıkış**: logoya 3 saniye basılı tutunca eşleştirmeyi kaldırma onayı açılır.
+1. **Eşleştirme** (`src/app/pair.tsx`): Panel › Kasa cihazları › *Tablet eşleştir* ekranındaki 6 haneli kod girilir (15 dk, tek kullanımlık).
+   Tablet anonim oturum açar, tek yazımda `devices/{yeni}` (`status: online`) oluşturur ve kodu kullanıldı işaretler.
+   Cihaz kimliği Keychain/Keystore'da (`expo-secure-store`) saklanır.
+2. **Kasa ekranı** (`src/app/index.tsx`): büyük QR, geri sayım halkası, işletme bilgisi, bağlantı durumu, bugünkü okutma sayısı, son 3 onay.
+   Ekran kararmaz (`expo-keep-awake`). Yatay ve dikey yerleşimi var.
+3. **QR**: sunucu saatine göre her 30 sn'lik pencerenin başında `qrTokens/{anahtar}` yazılır; QR içeriği
+   `kampuskartim://checkout/{businessId}/{anahtar}` (öğrenci uygulaması bu biçimi okur). Anahtar sunucuya yazılmadan QR değişmez;
+   bağlantı yokken üst çubuk "Bağlantı yok" gösterir.
+4. **Okutmalar**: `redemptions` where `deviceId == bu cihaz` canlı dinlenir; yeni okutma yeşil onay ekranını açar.
+5. **Kalp atışı** (`src/lib/kasa.tsx`): 30 sn'de bir ve uygulama öne geldiğinde `devices/{id}.lastSeenAt` (paneldeki çevrimiçi durumu).
+   Sunucu saatine göre saat farkı düzeltilir. Panelden devre dışı bırakılınca QR durur, yeniden etkinleştirilince kendiliğinden döner;
+   cihaz silinirse eşleştirme ekranına dönülür.
+6. **Gizli çıkış**: logoya 3 saniye basılı tutunca eşleştirmeyi kaldırma onayı açılır.
 
-## QR formatı (backend ile sözleşme)
-
-```
-https://kampuskartim.com/k/{deviceId}.{window}.{sig}
-window = floor(unixMs / 30000)
-sig    = base64url(HMAC-SHA256(secret, "{deviceId}:{window}"))[0..22]
-```
-
-QR tablette yerelde üretilir; tablet internetsiz kalsa bile kod geçerli kalır. Sunucu aynı sırla doğrular, saat kayması için bir önceki pencereyi de kabul eder. Referans doğrulama: `verifyToken` (`src/lib/qrToken.ts`).
-
-## Beklenen API
-
-| Uç | İstek | Yanıt |
-|---|---|---|
-| `POST /kasa/pair` | `{ code, deviceName }` | `{ deviceId, secret (base64url, 32 bayt), deviceToken, business: { name, register, location } }` |
-| `POST /kasa/heartbeat` | `Authorization: Bearer deviceToken`, `{ since }` | `{ serverTime, status: "active" \| "revoked", todayCount, events: [{ id, badge, campaign, student, at }] }` |
-
-Hata yanıtları `{ message, code }`; geçersiz kod için 404, süresi dolmuş kod için 410.
+`src/lib/qrToken.ts` içindeki HMAC'li çevrimdışı QR biçimi şu an kullanılmıyor (sunucu tarafında doğrulama için Cloud Functions gerekir).

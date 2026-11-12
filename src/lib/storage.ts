@@ -5,14 +5,14 @@ import { Platform } from 'react-native';
 
 export type Business = { name: string; register: string; location: string };
 export type Device = {
+  /** Firestore `devices/{deviceId}`; anonim oturumla (`authUid`) eşleşir. */
   deviceId: string;
-  secret: string;
-  deviceToken: string;
+  businessId: string;
   business: Business;
   pairedAt: string;
 };
 
-const KEY = 'kk.device.v1';
+const KEY = 'kk.device.v2';
 const web = Platform.OS === 'web';
 
 const backend = {

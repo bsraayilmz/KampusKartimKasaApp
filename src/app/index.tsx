@@ -28,7 +28,7 @@ function relTime(ts: number) {
 
 export default function KasaScreen() {
   useKeepAwake(); // kasa ekranı kararmasın
-  const { device, status, recent, mock, unpair, onScan } = useKasa();
+  const { device, status, qr, recent, mock, unpair, onScan } = useKasa();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const clock = useClock(status.clockOffsetMs);
@@ -55,10 +55,12 @@ export default function KasaScreen() {
     );
 
   const conn =
-    status.online === true
+    status.disabled
+      ? { text: 'Panelden devre dışı bırakıldı', dot: colors.red, bg: 'rgba(255,77,94,0.16)', fg: '#FFD3D8' }
+      : status.online === true
       ? { text: 'Çevrim içi', dot: colors.green, bg: colors.glass, fg: colors.white }
       : status.online === false
-        ? { text: 'Bağlantı yok · QR çalışmaya devam ediyor', dot: colors.red, bg: 'rgba(255,77,94,0.16)', fg: '#FFD3D8' }
+        ? { text: 'Bağlantı yok · yeniden bağlanıyor', dot: colors.red, bg: 'rgba(255,77,94,0.16)', fg: '#FFD3D8' }
         : { text: 'Bağlanıyor…', dot: colors.muted, bg: colors.glass, fg: colors.white };
 
   const info = (
@@ -147,12 +149,12 @@ export default function KasaScreen() {
             {info}
             {stats}
           </View>
-          <QrPanel device={device} clockOffsetMs={status.clockOffsetMs} size={qrSize} />
+          <QrPanel qr={qr} clockOffsetMs={status.clockOffsetMs} size={qrSize} />
         </View>
       ) : (
         <View style={styles.colLayout}>
           {info}
-          <QrPanel device={device} clockOffsetMs={status.clockOffsetMs} size={qrSize} />
+          <QrPanel qr={qr} clockOffsetMs={status.clockOffsetMs} size={qrSize} />
           {stats}
         </View>
       )}
